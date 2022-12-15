@@ -104,7 +104,6 @@ def create_user_interaction_network(
     tweet_iterator, edge_selector=["retweet", "mention", "reply", "quote"], version=1
 ):
     """
-
     :return network
     """
     userProp = dict()
@@ -160,7 +159,7 @@ def create_user_interaction_network(
                                 quote=0,
                             )
             if "reply" in edge_selector:
-                if tweet["in_reply_to_user_id"] is not None:
+                if tweet["in_reply_to_user_id"] is not None and len(tweet["entities"]["user_mentions"]) > 0:
                     repid = tweet["entities"]["user_mentions"][0]["screen_name"].lower()
                     if net.has_edge(uid, repid):
                         net.edges[uid, mid]["weight"] += 1
@@ -362,13 +361,19 @@ def create_hashtag_network(tweet_iterator, version=1):
     if version == 1:
         net = nx.Graph()
         htagCount, htagMinMaxTs = dict(), dict()
+        
+        counted= 0
+        m  = 0
         for tweet in tqdm(tweet_iterator):
             if "retweeted_status" in tweet:
+                m+=1 
                 continue
 
             tstamp = int(tweet["timestamp_ms"]) / 1000.0
 
             htags = [h["text"].lower() for h in tweet["entities"]["hashtags"]]
+           
+            counted+=1
             for i in range(len(htags)):
                 if htags[i] not in htagCount:
                     htagCount[htags[i]] = 0
@@ -383,15 +388,22 @@ def create_hashtag_network(tweet_iterator, version=1):
                     else:
                         net.add_edge(htags[i], htags[j], weight=1)
 
-        topList = sorted(list(htagCount.values()), reverse=True)[250]
+      
+        print("N RT: ", m )
+        print("Counted:",counted)
+        values = sorted(list(htagCount.values()), reverse=True) 
+        if len(values) > 250:
+            topList = values[250]
+        else: 
+            topList = values[-1]
         for n in net.nodes():
-            net.node[n]["count"] = htagCount.get(n, 0)
-            net.node[n]["tstamp_min"] = htagMinMaxTs[n][0]
-            net.node[n]["tstamp_max"] = htagMinMaxTs[n][1]
+            net.nodes[n]["count"] = htagCount.get(n, 0)
+            net.nodes[n]["tstamp_min"] = htagMinMaxTs[n][0]
+            net.nodes[n]["tstamp_max"] = htagMinMaxTs[n][1]
             if htagCount.get(n, 0) > topList:
-                net.node[n]["name_viz"] = n
+                net.nodes[n]["name_viz"] = n
             else:
-                net.node[n]["name_viz"] = ""
+                net.nodes[n]["name_viz"] = ""
 
         return net
     elif version == 2:
@@ -427,16 +439,19 @@ def create_hashtag_network(tweet_iterator, version=1):
                         net.edges[htags[i], htags[j]]["weight"] += 1
                     else:
                         net.add_edge(htags[i], htags[j], weight=1)
-
-        topList = sorted(list(htagCount.values()), reverse=True)[250]
+        values = sorted(list(htagCount.values()), reverse=True)
+        if len(values) > 250:
+            topList = values[250]
+        else:
+            topList = values[-1]
         for n in net.nodes():
-            net.node[n]["count"] = htagCount.get(n, 0)
-            net.node[n]["tstamp_min"] = htagMinMaxTs[n][0]
-            net.node[n]["tstamp_max"] = htagMinMaxTs[n][1]
+            net.nodes[n]["count"] = htagCount.get(n, 0)
+            net.nodes[n]["tstamp_min"] = htagMinMaxTs[n][0]
+            net.nodes[n]["tstamp_max"] = htagMinMaxTs[n][1]
             if htagCount.get(n, 0) > topList:
-                net.node[n]["name_viz"] = n
+                net.nodes[n]["name_viz"] = n
             else:
-                net.node[n]["name_viz"] = ""
+                net.nodes[n]["name_viz"] = ""
 
         return net
 
@@ -451,6 +466,9 @@ if __name__ == "__main__":
     if args.net == 3:
         user_user_net = create_user_interaction_network(
             tweet_iterator, version=args.apiv
+        )
+        tweet_iterator = get_data_iterator(
+            args.path, args.startdate, args.enddate, version=args.apiv
         )
         hashtag_net = create_hashtag_network(tweet_iterator, version=args.apiv)
         print("SAVING!")
